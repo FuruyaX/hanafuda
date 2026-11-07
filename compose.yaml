@@ -1,0 +1,13 @@
+services:
+  dev:
+    build: .
+    image: hanafuda-app-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      # Pyodide 本体とビルド結果。Google Drive の同期フォルダに置かない
+      - data:/data
+
+volumes:
+  data:

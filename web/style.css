@@ -1,0 +1,520 @@
+:root {
+  --felt: #1f4d2b;
+  --felt-dark: #163a20;
+  --washi: #f7f0e1;
+  --ink: #2a2118;
+  --gold: #d4a62a;
+  --cw: min(11vw, 60px); /* 札の幅（高さは各札で 1.55 倍） */
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  color: #f5f1e6;
+  background: var(--felt);
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at 50% 40%, #2a6339, var(--felt) 60%, var(--felt-dark));
+  overscroll-behavior: none;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom);
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  font-size: 1rem;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #c9b98f;
+  background: var(--washi);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button.primary {
+  background: #b3261e;
+  border-color: #8c1d17;
+  color: #fff;
+  font-weight: 700;
+}
+
+button.ghost {
+  background: transparent;
+  color: #f5f1e6;
+}
+
+button.small {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.hint {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  text-align: center;
+}
+
+/* ---- タイトル・読み込み ---- */
+.loading,
+.title,
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding-top: 8vh;
+}
+
+h1 {
+  font-size: 2.6rem;
+  margin: 0;
+  letter-spacing: 0.2em;
+  text-shadow: 0 2px 6px #0008;
+}
+
+h1 span {
+  display: block;
+  font-size: 1.1rem;
+  text-align: center;
+  letter-spacing: 0.5em;
+  color: var(--gold);
+}
+
+.title button {
+  width: min(320px, 90%);
+}
+
+.deco {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+}
+
+.title .chips button {
+  width: auto;
+}
+
+.chip.on {
+  background: var(--gold);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+.yaku-table,
+.result-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.yaku-table th,
+.yaku-table td,
+.result-table td {
+  border-bottom: 1px solid #ffffff22;
+  padding: 6px 4px;
+  text-align: left;
+}
+
+.yaku-table td:nth-child(2) {
+  white-space: nowrap;
+  color: var(--gold);
+}
+
+/* ---- 札 ---- */
+.card {
+  position: relative;
+  width: var(--cw);
+  height: calc(var(--cw) * 1.55);
+  flex: none;
+  border-radius: 5px;
+  background: var(--washi);
+  color: var(--ink);
+  border: 2px solid #3b2d20;
+  box-shadow: 0 2px 4px #0006;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 2px 0;
+  transition: transform 0.12s;
+}
+
+.card .flower {
+  font-size: calc(var(--cw) * 0.36);
+  font-weight: 700;
+  line-height: 1.1;
+  writing-mode: vertical-rl;
+}
+
+.card .label {
+  font-size: calc(var(--cw) * 0.22);
+  font-weight: 700;
+  padding: 1px 2px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.card .month {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: calc(var(--cw) * 0.18);
+  opacity: 0.6;
+}
+
+.card.hikari {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold) inset, 0 2px 4px #0006;
+}
+
+.card.hikari .label {
+  background: var(--gold);
+  color: #3a2800;
+}
+
+.card.tane .label {
+  background: #2e6b3a;
+  color: #fff;
+}
+
+.card .ribbon {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  width: 22%;
+  height: 46%;
+  transform: translateX(-50%) rotate(-8deg);
+  border-radius: 2px;
+}
+
+.ribbon.red {
+  background: #c62828;
+}
+
+.ribbon.blue {
+  background: #1e4fa8;
+}
+
+.ribbon.plain {
+  background: #d9645a;
+}
+
+.card.tan .label {
+  position: relative;
+  z-index: 1;
+  writing-mode: vertical-rl;
+  font-size: calc(var(--cw) * 0.17);
+  color: #fff;
+  background: transparent;
+  text-shadow: 0 0 2px #000;
+}
+
+.card.kasu {
+  background: linear-gradient(#f7f0e1, #ebe0c6);
+}
+
+/* 月ごとの花の色 */
+.m1 .flower { color: #2e6b3a; }
+.m2 .flower { color: #c2185b; }
+.m3 .flower { color: #e06b92; }
+.m4 .flower { color: #7b5ea7; }
+.m5 .flower { color: #3d3da0; }
+.m6 .flower { color: #b0306a; }
+.m7 .flower { color: #a03c78; }
+.m8 .flower { color: #8a7a3a; }
+.m9 .flower { color: #c99a12; }
+.m10 .flower { color: #c0392b; }
+.m11 .flower { color: #3f7d5a; }
+.m12 .flower { color: #6d5a8f; }
+
+.card.back {
+  background: repeating-linear-gradient(45deg, #7a1d16, #7a1d16 4px, #8f2a20 4px, #8f2a20 8px);
+  border-color: #3b0f0b;
+}
+
+.card.mini {
+  --cw: min(6.4vw, 30px);
+}
+
+.card[data-action] {
+  cursor: pointer;
+}
+
+.card.sel {
+  transform: translateY(-12px);
+  box-shadow: 0 0 0 3px #fff, 0 6px 10px #0008;
+}
+
+.card.target,
+.card.glow {
+  box-shadow: 0 0 0 3px #ffe066, 0 0 14px #ffe066;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    transform: translateY(-3px);
+  }
+}
+
+/* ---- 盤面 ---- */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 100dvh;
+  padding: 6px 0 10px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  background: #0003;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.who {
+  font-size: 0.85rem;
+}
+
+.turn {
+  background: #b3261e;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.koi {
+  background: var(--gold);
+  color: #3a2800;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.hand {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.small-hand {
+  gap: 2px;
+}
+
+.my-hand {
+  justify-content: center;
+  padding-top: 12px;
+  min-height: calc(var(--cw) * 1.55 + 14px);
+}
+
+.captured {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-height: 28px;
+}
+
+.cap-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.cap-cards {
+  display: flex;
+}
+
+.cap-cards .card + .card {
+  margin-left: calc(var(--cw) * -0.55);
+}
+
+.cap-count {
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.empty {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.yaku-tag {
+  font-size: 0.8rem;
+  color: #ffe066;
+}
+
+.field-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0002;
+  border-radius: 12px;
+  padding: 10px 6px;
+  min-height: calc(var(--cw) * 3.1 + 30px);
+  position: relative;
+}
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.7rem;
+  gap: 2px;
+}
+
+.field {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: center;
+  justify-content: center;
+}
+
+.pending,
+.drawn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.65rem;
+}
+
+.message {
+  min-height: 1.4em;
+  text-align: center;
+  font-size: 0.85rem;
+  background: #0003;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+/* ---- ダイアログ ---- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: #0008;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.dialog {
+  background: var(--washi);
+  color: var(--ink);
+  border-radius: 14px;
+  padding: 18px;
+  width: min(360px, 92vw);
+  max-height: 88dvh;
+  overflow: auto;
+  text-align: center;
+  box-shadow: 0 10px 30px #000a;
+}
+
+.dialog h3 {
+  margin: 0 0 8px;
+}
+
+.dialog ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.dialog .row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.dialog .result-table td {
+  border-bottom-color: #0002;
+}
+
+/* PC など横に広い画面では札を少し大きく */
+@media (min-width: 700px) {
+  :root {
+    --cw: 58px;
+  }
+  .card.mini {
+    --cw: 30px;
+  }
+}
+
+/* ---- 対戦相手（花合わせは 2 人を横並び） ---- */
+.opps {
+  display: grid;
+  gap: 6px;
+}
+
+.opps.n2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.opps.n2 .side.opp {
+  min-width: 0;
+  background: #0002;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.opps.n2 .card.mini {
+  --cw: min(5.2vw, 26px);
+}
+
+.chip.mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.chip.mode small {
+  font-size: 0.65rem;
+  opacity: 0.75;
+}
+
+.result-table th {
+  text-align: left;
+  padding: 4px;
+  white-space: nowrap;
+}
+
+.tally td.yk {
+  font-size: 0.75rem;
+}
+
+.page h2 {
+  margin: 8px 0 0;
+}

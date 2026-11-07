@@ -1,0 +1,5 @@
+dist/
+_site/
+.pyodide/
+__pycache__/
+.pytest_cache/

@@ -1,5 +1,5 @@
 // Service Worker: アプリ一式（Pyodide 含む）をキャッシュしてオフラインで動かす。
-// __VERSION__ と __ASSETS__ は scripts/build.py が埋め込む。
+// キャッシュ名のバージョンとファイル一覧は scripts/build.py が埋め込む。
 const CACHE = 'hanafuda-__VERSION__';
 const ASSETS = __ASSETS__;
 

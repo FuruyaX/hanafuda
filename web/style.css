@@ -518,3 +518,150 @@ header {
 .page h2 {
   margin: 8px 0 0;
 }
+
+/* ---- 人数・オンライン ---- */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title .stepper button {
+  width: auto;
+  min-width: 44px;
+}
+
+.row2 {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  width: min(320px, 90%);
+}
+
+.row2 button {
+  flex: 1;
+}
+
+.notice {
+  background: #fff3c4;
+  color: #4a3700;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.lobby {
+  align-items: stretch;
+  padding-top: 3vh;
+  gap: 10px;
+}
+
+.lobby h2 {
+  text-align: center;
+}
+
+.seat {
+  background: #0003;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.seat .ok {
+  color: #9be59b;
+}
+
+.code-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.code-box .row2,
+.lobby .row2 {
+  width: 100%;
+}
+
+textarea,
+input {
+  font: inherit;
+  font-size: 0.8rem;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #c9b98f;
+  padding: 6px;
+  background: var(--washi);
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.status {
+  text-align: center;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.bench {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bench-chip {
+  font-size: 0.7rem;
+  background: #0003;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+.bench-chip.on {
+  background: #b3261e;
+}
+
+.bench-chip.off {
+  opacity: 0.6;
+}
+
+.declare {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #0002;
+  border-radius: 12px;
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.declare .row2 {
+  width: min(320px, 90%);
+}
+
+.opps.n3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.opps.n3 .side.opp {
+  min-width: 0;
+  background: #0002;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.opps.n3 .card.mini {
+  --cw: min(4.2vw, 22px);
+}

@@ -1,5 +1,6 @@
 // Pyodide を読み込み、Python のゲーム本体（main.py）を起動するだけの最小ローダー。
 import { loadPyodide } from './pyodide/pyodide.mjs';
+import './net.js';
 
 const status = document.getElementById('status');
 let pyodide = null;
@@ -25,6 +26,15 @@ window.installApp = async () => {
 // ---- オフライン用 Service Worker（HTTPS または localhost でのみ有効） ----
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('SW:', e));
+}
+
+if (location.search.includes('nettest')) {
+  // 通信層の自己診断: 同じ画面の中でホストとゲストをつないで確かめる
+  window.net
+    .selfTest()
+    .then((r) => (document.title = status.textContent = 'NETTEST OK ' + JSON.stringify(r)))
+    .catch((e) => (document.title = status.textContent = 'NETTEST NG ' + e));
+  throw new Error('nettest');
 }
 
 try {

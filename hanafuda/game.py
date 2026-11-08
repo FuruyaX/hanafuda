@@ -1,4 +1,12 @@
-"""札を合わせて取るゲームの共通進行と、こいこい（2 人）。UI はメソッドを呼んで状態を描画するだけ。"""
+"""札を合わせて取るゲームの共通進行と、こいこい。UI はメソッドを呼んで状態を描画するだけ。
+
+参加者は最大 12 人。実際に札を持って戦うのは SEATS 人（こいこい 2 / 花合わせ 3）で、
+毎月、親から順に「勝負 / 降り」を決めて絞る。
+- 参加者数が SEATS の倍数なら、配られた手札を見てから決める（降りたら手札は山に戻す）
+- 倍数でなければ、手札なしで決める
+- 残りの人数と空き席が同じになったら、残りは強制的に勝負
+- 降りた人は、勝負した各人に降り賃（FOLD_FEE）を払う。決める前に席が埋まった人は見学（払わない）
+"""
 
 from __future__ import annotations
 
@@ -9,8 +17,11 @@ from enum import Enum
 from .cards import DECK, Card
 from .yaku import Yaku, base_score, final_score, find_yaku
 
+MAX_PLAYERS = 12
+
 
 class Phase(Enum):
+    DECLARE = "declare"  # 勝負 / 降り の選択
     PLAY = "play"  # 手札を出す
     CHOOSE_HAND = "choose_hand"  # 出した札で取る場札を選ぶ（候補 2 枚）
     CHOOSE_DRAW = "choose_draw"  # めくった札で取る場札を選ぶ（候補 2 枚）
@@ -29,6 +40,7 @@ class Player:
     hand: list[Card] = field(default_factory=list)
     captured: list[Card] = field(default_factory=list)
     score: int = 0  # 対局の合計
+    folded: bool = False  # この月は自分で降りた（降り賃を払う）
     koikoi: bool = False  # この月にこいこいした（こいこいのみ）
     stop_base: int = 0  # 最後に判断したときの基本点（こいこいのみ）
 
@@ -36,7 +48,10 @@ class Player:
 @dataclass
 class RoundResult:
     month: int
-    deltas: list[int]  # 各プレイヤーの得点増減
+    deltas: list[int]  # 参加者ごとの得点増減（降り賃を含む）
+    active: list[int]  # 勝負した人
+    folded: list[int]  # 自分で降りた人（勝負しなかった残りは見学）
+    fold_fee: int  # 降りた人が勝負した 1 人に払う額
 
 
 @dataclass
@@ -50,12 +65,17 @@ class KoikoiResult(RoundResult):
 class MatchingGame:
     """手札を出し、山札をめくり、同じ月の札を取る ― こいこい・花合わせ共通の進行。"""
 
+    MODE = ""
     TITLE = ""
+    SEATS = 2
     HAND_SIZE = 8
     FIELD_SIZE = 8
+    FOLD_FEE = 1
 
     def __init__(self, months: int, names: tuple[str, ...], rng: random.Random | None = None,
                  dealer: int | None = None):
+        if not self.SEATS <= len(names) <= MAX_PLAYERS:
+            raise ValueError(f"{self.TITLE}は {self.SEATS}〜{MAX_PLAYERS} 人です")
         self.rng = rng or random.Random()
         self.months = months
         self.players = [Player(n) for n in names]
@@ -70,6 +90,11 @@ class MatchingGame:
     def player(self) -> Player:
         return self.players[self.current]
 
+    @property
+    def sees_hand_on_declare(self) -> bool:
+        """参加者数が席数の倍数なら、手札を見てから勝負 / 降りを決める。"""
+        return len(self.players) % self.SEATS == 0
+
     def matches(self, card: Card) -> list[Card]:
         return [c for c in self.field if c.month == card.month]
 
@@ -79,6 +104,22 @@ class MatchingGame:
         return scores.index(best) if scores.count(best) == 1 else None
 
     # ---- 操作 ----
+    def declare(self, play: bool) -> None:
+        """勝負（True）か降り（False）か。"""
+        self._expect(Phase.DECLARE)
+        p = self.player
+        if play:
+            self.active.append(self.current)
+            self._log(f"{p.name}: 勝負")
+        else:
+            p.folded = True
+            self.deck.extend(p.hand)  # 見た手札は山に戻して切り直す
+            p.hand = []
+            self.rng.shuffle(self.deck)
+            self._log(f"{p.name}: 降り")
+        self.declare_pos += 1
+        self._advance_declare()
+
     def play(self, card_id: int) -> None:
         """手札を 1 枚出す。"""
         self._expect(Phase.PLAY)
@@ -120,36 +161,72 @@ class MatchingGame:
         self._next_turn()
 
     def _on_exhausted(self) -> None:
-        """全員の手札がなくなったとき。"""
+        """勝負した全員の手札がなくなったとき。"""
         raise NotImplementedError
 
-    # ---- 共通処理 ----
+    # ---- 勝負 / 降り ----
     def _start_round(self) -> None:
         n = len(self.players)
-        while True:
-            deck = list(DECK)
-            self.rng.shuffle(deck)
-            field_cards = deck[:self.FIELD_SIZE]
-            months = [c.month for c in field_cards]
-            if all(months.count(m) < 4 for m in set(months)):
-                break  # 場に同じ月が 4 枚あれば配り直し
-        self.field = field_cards
-        rest = deck[self.FIELD_SIZE:]
-        for i, p in enumerate(self.players):
-            p.hand = sorted(rest[i * self.HAND_SIZE:(i + 1) * self.HAND_SIZE], key=lambda c: c.id)
-            p.captured = []
-            p.koikoi = False
+        for p in self.players:
+            p.hand, p.captured = [], []
+            p.folded = p.koikoi = False
             p.stop_base = 0
-        self.deck = rest[n * self.HAND_SIZE:]
-        self.current = self.dealer
-        self.phase = Phase.PLAY
+        self.deck = list(DECK)
+        self.rng.shuffle(self.deck)
+        self.field: list[Card] = []
+        self.active: list[int] = []
+        self.order = [(self.dealer + i) % n for i in range(n)]  # 親から順に
+        self.declare_pos = 0
         self.pending: Card | None = None
         self.last_played: Card | None = None
         self.last_drawn: Card | None = None
         self.last_result: RoundResult | None = None
+        self.phase = Phase.DECLARE
         self._log(f"--- {self.month} 月目（親: {self.players[self.dealer].name}）---")
+        self._advance_declare()
+
+    def _deal_hand(self, index: int) -> None:
+        p = self.players[index]
+        p.hand = sorted(self.deck[:self.HAND_SIZE], key=lambda c: c.id)
+        del self.deck[:self.HAND_SIZE]
+
+    def _advance_declare(self) -> None:
+        forced_any = False
+        while len(self.active) < self.SEATS:
+            index = self.order[self.declare_pos]
+            remaining = len(self.order) - self.declare_pos
+            if self.sees_hand_on_declare:
+                self._deal_hand(index)
+            if remaining == self.SEATS - len(self.active):  # 残り全員が強制的に勝負
+                self.active.append(index)
+                self.declare_pos += 1
+                forced_any = True
+                continue
+            self.current = index
+            self.phase = Phase.DECLARE
+            return
+        if forced_any and len(self.players) > self.SEATS:
+            self._log("残りの人は強制的に勝負")
+        self._deal_rest()
+
+    def _deal_rest(self) -> None:
+        if not self.sees_hand_on_declare:
+            for index in self.active:
+                self._deal_hand(index)
+        while True:  # 場に同じ月が 4 枚なら配り直し
+            months = [c.month for c in self.deck[:self.FIELD_SIZE]]
+            if all(months.count(m) < 4 for m in set(months)):
+                break
+            self.rng.shuffle(self.deck)
+        self.field = self.deck[:self.FIELD_SIZE]
+        del self.deck[:self.FIELD_SIZE]
+        self.current = self.active[0]
+        self.phase = Phase.PLAY
+        names = "・".join(self.players[i].name for i in self.active)
+        self._log(f"勝負: {names}")
         self._on_deal()
 
+    # ---- 共通処理 ----
     def _expect(self, phase: Phase) -> None:
         if self.phase != phase:
             raise GameError(f"今は {phase.value} ではありません（{self.phase.value}）")
@@ -187,32 +264,46 @@ class MatchingGame:
             self._end_turn()
 
     def _next_turn(self) -> None:
-        if all(not p.hand for p in self.players):
+        if all(not self.players[i].hand for i in self.active):
             self._on_exhausted()
             return
-        self.current = (self.current + 1) % len(self.players)
+        pos = self.active.index(self.current)
+        self.current = self.active[(pos + 1) % len(self.active)]
         self.phase = Phase.PLAY
 
     def _record(self, result: RoundResult) -> None:
+        """月の結果を記録する。降り賃を加えてから合計に足す。"""
+        for f in result.folded:
+            result.deltas[f] -= self.FOLD_FEE * len(result.active)
+        for a in result.active:
+            result.deltas[a] += self.FOLD_FEE * len(result.folded)
         for p, d in zip(self.players, result.deltas):
             p.score += d
         self.results.append(result)
         self.last_result = result
         self.phase = Phase.ROUND_OVER
 
+    def _new_result_args(self) -> tuple[int, list[int], list[int], list[int], int]:
+        folded = [i for i, p in enumerate(self.players) if p.folded]
+        return self.month, [0] * len(self.players), list(self.active), folded, self.FOLD_FEE
+
 
 class Game(MatchingGame):
-    """こいこい（2 人）。役ができたら勝負かこいこいを選ぶ。"""
+    """こいこい。役ができたら勝負かこいこいを選ぶ。"""
 
+    MODE = "koikoi"
     TITLE = "こいこい"
+    SEATS = 2
+    FOLD_FEE = 1  # 文
 
-    def __init__(self, months: int = 6, names: tuple[str, str] = ("あなた", "CPU"),
+    def __init__(self, months: int = 6, names: tuple[str, ...] = ("あなた", "CPU"),
                  rng: random.Random | None = None, dealer: int | None = None):
         super().__init__(months, names, rng, dealer)
 
     @property
     def opponent(self) -> Player:
-        return self.players[1 - self.current]
+        other = next(i for i in self.active if i != self.current)
+        return self.players[other]
 
     def decide(self, koikoi: bool) -> None:
         """役ができたときの判断。False で勝負（この月を終える）。"""
@@ -243,16 +334,16 @@ class Game(MatchingGame):
         self._finish_round(None)
 
     def _finish_round(self, winner: int | None) -> None:
+        month, deltas, active, folded, fee = self._new_result_args()
         if winner is None:
             self._log("流れ（引き分け）")
-            self._record(KoikoiResult(self.month, [0, 0]))
+            self._record(KoikoiResult(month, deltas, active, folded, fee))
             return
         w = self.players[winner]
         yaku = find_yaku(w.captured)
         base = sum(y.points for y in yaku)
-        points = final_score(base, self.players[1 - winner].koikoi)
-        deltas = [0, 0]
+        points = final_score(base, self.opponent.koikoi if self.current == winner else False)
         deltas[winner] = points
         self.dealer = winner
         self._log(f"{w.name}: {points} 文獲得")
-        self._record(KoikoiResult(self.month, deltas, winner, yaku, base, points))
+        self._record(KoikoiResult(month, deltas, active, folded, fee, winner, yaku, base, points))

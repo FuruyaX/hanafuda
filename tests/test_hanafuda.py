@@ -165,3 +165,75 @@ def test_hanaawase_full_game(seed):
     assert sum(p.score for p in g.players) == 0
     for r in g.results:
         assert sum(t.card_points for t in r.tallies) == 264
+
+
+# ---- 多人数（勝負 / 降り）とプロトコル ----
+import json  # noqa: E402
+
+from hanafuda import protocol  # noqa: E402
+from hanafuda.game import MAX_PLAYERS  # noqa: E402
+
+
+@pytest.mark.parametrize("mode", ["koikoi", "hanaawase"])
+@pytest.mark.parametrize("n", range(2, MAX_PLAYERS + 1))
+def test_many_players_full_game(mode, n):
+    cls = protocol.MODES[mode]
+    if n < cls.SEATS:
+        with pytest.raises(ValueError):
+            cls(names=tuple(f"P{i}" for i in range(n)))
+        return
+    for seed in range(3):
+        g = cls(months=6, names=tuple(f"P{i}" for i in range(n)), rng=random.Random(seed * 100 + n))
+        for _ in range(5000):
+            if g.phase == Phase.GAME_OVER:
+                break
+            if g.phase not in (Phase.ROUND_OVER, Phase.DECLARE):
+                _check_conservation(g)
+                assert len(g.active) == cls.SEATS
+                assert all(not p.hand for i, p in enumerate(g.players) if i not in g.active)
+            # 手札を見て決めるのは参加者数が席数の倍数のときだけ
+            if g.phase == Phase.DECLARE:
+                assert bool(g.player.hand) == (n % cls.SEATS == 0)
+            json.dumps(protocol.view(g, 0))  # どの局面でも JSON にできる
+            ai.act(g)
+        assert g.phase == Phase.GAME_OVER
+        for r in g.results:
+            assert len(r.deltas) == n
+            assert set(r.folded).isdisjoint(r.active)
+            if mode == "hanaawase":
+                assert sum(r.deltas) == 0  # 降り賃を含めても合計 0
+
+
+def test_fold_fee_and_forced_play():
+    # 4 人の花合わせ: 親から 3 人が降りることはできない（残り 3 人なら強制）
+    g = HanaawaseGame(months=1, names=("A", "B", "C", "D"), rng=random.Random(5), dealer=0)
+    assert g.phase == Phase.DECLARE and g.current == 0
+    assert g.player.hand == []  # 4 人は 3 の倍数でないので手札なし
+    g.declare(False)  # A が降りる → 残り 3 人は強制的に勝負
+    assert g.phase == Phase.PLAY
+    assert g.active == [1, 2, 3]
+    while g.phase != Phase.ROUND_OVER:
+        ai.act(g)
+    r = g.last_result
+    assert r.folded == [0]
+    assert r.deltas[0] == -5 * 3
+
+
+def test_sees_hand_when_multiple_of_seats():
+    g = Game(months=1, names=("A", "B", "C", "D"), rng=random.Random(1), dealer=0)
+    assert g.sees_hand_on_declare and len(g.player.hand) == 8
+    shown = list(g.player.hand)
+    g.declare(False)
+    assert g.players[0].hand == []
+    assert all(c in g.deck or c in g.player.hand for c in shown)  # 山に戻った
+
+
+def test_protocol_hides_other_hands_and_checks_turn():
+    g = Game(rng=random.Random(3))
+    v = protocol.view(g, 0)
+    assert v["hand"] == [c.id for c in g.players[0].hand]
+    assert "hand" not in v["players"][1] and v["players"][1]["hand_count"] == 8
+    other = 1 - g.current
+    with pytest.raises(GameError):
+        protocol.apply(g, other, {"type": "play", "card": g.players[other].hand[0].id})
+    protocol.apply(g, g.current, {"type": "play", "card": g.player.hand[0].id})

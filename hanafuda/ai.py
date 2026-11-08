@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .cards import AKATAN, AOTAN, CHOU, INO, SAKAZUKI, SHIKA, Card, Kind
 from .game import Game, MatchingGame, Phase
-from .hanaawase import CARD_POINTS, HanaawaseGame, find_dekiyaku
+from .hanaawase import CARD_POINTS, HanaawaseGame, find_dekiyaku, find_teyaku
 from .yaku import base_score
 
 _KIND_VALUE = {Kind.HIKARI: 10, Kind.TANE: 5, Kind.TAN: 4, Kind.KASU: 1}
@@ -60,9 +60,27 @@ def decide_koikoi(game: Game) -> bool:
     return base < 5 and len(p.hand) >= 4 and not opp_close
 
 
+def decide_declare(game: MatchingGame) -> bool:
+    """勝負（True）か降りか。手札が見えれば札の価値で、見えなければ点差と運で決める。"""
+    p = game.player
+    if p.hand:
+        value = sum(card_value(game, c) for c in p.hand)
+        if isinstance(game, HanaawaseGame):
+            value += sum(y.points for y in find_teyaku(p.hand))
+            threshold = 60  # 7 枚の平均はおよそ 45
+        else:
+            threshold = 30  # 8 枚の平均はおよそ 25
+        return value + game.rng.random() * 10 >= threshold
+    leader = max(q.score for q in game.players)
+    behind = p.score < leader
+    return game.rng.random() < (0.65 if behind else 0.45)
+
+
 def act(game: MatchingGame) -> None:
     """現在の手番プレイヤーとして 1 手進める（CPU とデモ用）。"""
-    if game.phase == Phase.PLAY:
+    if game.phase == Phase.DECLARE:
+        game.declare(decide_declare(game))
+    elif game.phase == Phase.PLAY:
         game.play(choose_play(game).id)
     elif game.phase in (Phase.CHOOSE_HAND, Phase.CHOOSE_DRAW):
         assert game.pending is not None

@@ -1,4 +1,4 @@
-"""花合わせ（3 人）。手札がなくなるまで取り合い、札の点数・出来役・手役で精算する。
+"""花合わせ（勝負するのは 3 人。参加は 3〜12 人）。手札がなくなるまで取り合い、札の点数・出来役・手役で精算する。
 
 点数や役の値は仮のもの。ルールを変えるときはこのファイルの定数だけ直せばよい。
 """
@@ -16,8 +16,9 @@ from .yaku import Yaku
 
 CARD_POINTS = {Kind.HIKARI: 20, Kind.TANE: 10, Kind.TAN: 5, Kind.KASU: 1}
 TOTAL_POINTS = 264  # 48 枚の合計
-PLAYERS = 3
+PLAYERS = 3  # 勝負する人数
 BASELINE = TOTAL_POINTS // PLAYERS  # 88 点を超えた分が勝ち
+FOLD_FEE = 5  # 降りた人が勝負した 1 人に払う点
 
 # 出来役（取り札でそろえる）。値は他の 2 人から 1 人ずつ受け取る
 DEKIYAKU_POINTS = {
@@ -41,6 +42,7 @@ RULE_GUIDE: list[tuple[str, str, str]] = [
     ("三本（手役）", "10", "同じ月が 3 枚（1 組ごと）"),
     ("光一・短一（手役）", "各 20", "光（短冊）1 枚と残り 6 枚がカス"),
     ("空素（手役）", "20", "手札 7 枚すべてカス"),
+    ("降り賃", f"{FOLD_FEE} × 3", f"4 人以上で降りた人は、勝負した 3 人に {FOLD_FEE} 点ずつ払う"),
 ]
 
 
@@ -114,7 +116,7 @@ class PlayerTally:
 
 @dataclass
 class HanaawaseResult(RoundResult):
-    tallies: list[PlayerTally] = field(default_factory=list)
+    tallies: list[PlayerTally] = field(default_factory=list)  # 勝負した人（active 順）
 
 
 def settle(card_pts: list[int], yaku_totals: list[int]) -> list[int]:
@@ -128,23 +130,31 @@ def settle(card_pts: list[int], yaku_totals: list[int]) -> list[int]:
 
 
 class HanaawaseGame(MatchingGame):
+    MODE = "hanaawase"
     TITLE = "花合わせ"
+    SEATS = PLAYERS
     HAND_SIZE = 7
     FIELD_SIZE = 6
+    FOLD_FEE = FOLD_FEE
 
-    def __init__(self, months: int = 6, names: tuple[str, str, str] = ("あなた", "CPU 1", "CPU 2"),
+    def __init__(self, months: int = 6, names: tuple[str, ...] = ("あなた", "CPU 1", "CPU 2"),
                  rng: random.Random | None = None, dealer: int | None = None):
         super().__init__(months, names, rng, dealer)
 
     def _on_deal(self) -> None:
-        self.teyaku = [find_teyaku(p.hand) for p in self.players]
+        self.teyaku = {i: find_teyaku(self.players[i].hand) for i in self.active}
 
     def _on_exhausted(self) -> None:
-        pts = [card_points(p.captured) for p in self.players]
-        deki = [find_dekiyaku(p.captured) for p in self.players]
-        totals = [sum(y.points for y in d + t) for d, t in zip(deki, self.teyaku)]
-        deltas = settle(pts, totals)
-        tallies = [PlayerTally(*row) for row in zip(pts, deki, self.teyaku, deltas)]
-        self._log("全員の手札がなくなりました。精算します")
-        self._record(HanaawaseResult(self.month, deltas, tallies))
+        players = [self.players[i] for i in self.active]
+        pts = [card_points(p.captured) for p in players]
+        deki = [find_dekiyaku(p.captured) for p in players]
+        teyaku = [self.teyaku[i] for i in self.active]
+        totals = [sum(y.points for y in d + t) for d, t in zip(deki, teyaku)]
+        active_deltas = settle(pts, totals)
+        tallies = [PlayerTally(*row) for row in zip(pts, deki, teyaku, active_deltas)]
+        month, deltas, active, folded, fee = self._new_result_args()
+        for i, d in zip(self.active, active_deltas):
+            deltas[i] = d
+        self._log("勝負した全員の手札がなくなりました。精算します")
+        self._record(HanaawaseResult(month, deltas, active, folded, fee, tallies))
         self.dealer = (self.dealer + 1) % len(self.players)  # 親は順番に回す
